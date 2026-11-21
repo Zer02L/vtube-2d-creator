@@ -1,7 +1,7 @@
 [package]
-name = "tauri-app"
+name = "creator-2d-avatar"
 version = "0.1.0"
-description = "A Tauri App"
+description = "2D VTuber Creator and Studio"
 authors = ["you"]
 edition = "2024"
 
