@@ -76,6 +76,44 @@ export interface LoopProcessResult {
   ffmpegArgs: string[];
 }
 
+export interface PreviewSheet {
+  path: string;
+  columns: number;
+  rows: number;
+  frameCount: number;
+  tileWidth: number;
+  tileHeight: number;
+  durationSec: number;
+}
+
+export interface TranscodeOptions {
+  inputPath: string;
+  outputPath: string;
+  resolution?: string | null;
+  chromaKey?: {
+    color_hex: string;
+    similarity: number;
+    blend: number;
+  } | null;
+}
+
+export interface OptimizeProgressEvent {
+  stage: string;
+  percent: number;
+  message: string;
+}
+
+export interface TranscodeResult {
+  outputPath: string;
+  durationSec: number;
+  frameCount: number;
+  fileSizeBytes: number;
+  width: number;
+  height: number;
+  hasAlpha: boolean;
+  ffmpegArgs: string[];
+}
+
 export interface VideoSlot {
   id: string;
   name: string;

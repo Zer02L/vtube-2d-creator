@@ -1,4 +1,5 @@
 import type { ChromaKeyConfig, LoopCandidate, LoopMode } from '../types/avatar';
+import { applyChromaKeyInPlace, resolveResolutionDims } from './chroma';
 
 export interface ExtractedPreviewData {
   frames: HTMLCanvasElement[];
@@ -693,28 +694,6 @@ function parseResolutionDims(
   };
 }
 
-function applyChromaKeyInPlace(data: Uint8ClampedArray, ck: ChromaKeyConfig) {
-  const hex = ck.colorHex.replace('#', '');
-  const kr = parseInt(hex.slice(0, 2), 16) || 0;
-  const kg = parseInt(hex.slice(2, 4), 16) || 255;
-  const kb = parseInt(hex.slice(4, 6), 16) || 0;
-  const simDist = ck.similarity * 442; // max RGB euclidean ~441.67
-  const blendDist = ck.blend * 442;
-
-  for (let i = 0; i < data.length; i += 4) {
-    const dr = data[i] - kr;
-    const dg = data[i + 1] - kg;
-    const db = data[i + 2] - kb;
-    const dist = Math.sqrt(dr * dr + dg * dg + db * db);
-    if (dist <= simDist) {
-      data[i + 3] = 0;
-    } else if (blendDist > 0 && dist < simDist + blendDist) {
-      const factor = (dist - simDist) / blendDist;
-      data[i + 3] = Math.round(data[i + 3] * factor);
-    }
-  }
-}
-
 export async function exportLoopInBrowser(
   videoUrl: string,
   params: {
@@ -909,6 +888,123 @@ export async function exportLoopInBrowser(
     };
   } finally {
     bitmaps.length = 0;
+    video.removeAttribute('src');
+    video.load();
+  }
+}
+
+export interface BrowserOptimizeResult {
+  blob: Blob;
+  url: string;
+  durationSec: number;
+  frameCount: number;
+  fileSizeBytes: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Резервный путь конвертации без Tauri: снимает кадры с видео через canvas,
+ * применяет хромакей и записывает WebM через MediaRecorder.
+ * Внимание: MediaRecorder большинства браузеров не кодирует альфу в WebM —
+ * для настоящего yuva420p используйте десктопное приложение (FFmpeg).
+ */
+export async function exportChromaKeyedWebmInBrowser(
+  videoUrl: string,
+  params: {
+    resolution?: string | null;
+    chromaKey: ChromaKeyConfig;
+    targetFps?: number | null;
+  },
+  onProgress?: (percent: number, message: string) => void
+): Promise<BrowserOptimizeResult> {
+  onProgress?.(3, 'Загрузка видео...');
+  const video = document.createElement('video');
+  video.muted = true;
+  video.playsInline = true;
+  video.preload = 'auto';
+  video.src = videoUrl;
+  await waitForEvent(video, 'loadedmetadata');
+
+  const srcW = video.videoWidth || 640;
+  const srcH = video.videoHeight || 480;
+  const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 1;
+  const { width, height } = resolveResolutionDims(params.resolution, srcW, srcH);
+  const fps = Math.max(10, Math.min(30, params.targetFps || 24));
+  const totalFrames = Math.min(1200, Math.max(2, Math.ceil(duration * fps)));
+
+  const rawCanvas = document.createElement('canvas');
+  rawCanvas.width = width;
+  rawCanvas.height = height;
+  const rawCtx = rawCanvas.getContext('2d')!;
+
+  const frames: HTMLCanvasElement[] = [];
+  try {
+    await captureFrames(
+      video,
+      totalFrames,
+      () => {
+        rawCtx.clearRect(0, 0, width, height);
+        rawCtx.drawImage(video, 0, 0, width, height);
+        if (params.chromaKey.enabled) {
+          const img = rawCtx.getImageData(0, 0, width, height);
+          applyChromaKeyInPlace(img.data, params.chromaKey);
+          rawCtx.putImageData(img, 0, 0);
+        }
+        frames.push(snapshotFrame(rawCanvas, width, height));
+      },
+      {
+        onProgress: (pct) => onProgress?.(5 + pct * 0.45, `Извлечение кадров (${pct}%)...`),
+      }
+    );
+
+    onProgress?.(52, 'Подготовка кодировщика WebM...');
+    const mimeType = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'].find((m) =>
+      MediaRecorder.isTypeSupported(m)
+    );
+    if (!mimeType) {
+      throw new Error('Браузер не поддерживает запись WebM через MediaRecorder');
+    }
+
+    const outCanvas = document.createElement('canvas');
+    outCanvas.width = width;
+    outCanvas.height = height;
+    const outCtx = outCanvas.getContext('2d')!;
+    const stream = outCanvas.captureStream(fps);
+    const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 4_000_000 });
+    const chunks: Blob[] = [];
+    recorder.ondataavailable = (ev) => {
+      if (ev.data.size > 0) chunks.push(ev.data);
+    };
+    const stopped = new Promise<void>((resolve) => {
+      recorder.onstop = () => resolve();
+    });
+
+    recorder.start();
+    const frameMs = 1000 / fps;
+    for (let i = 0; i < frames.length; i++) {
+      outCtx.clearRect(0, 0, width, height);
+      outCtx.drawImage(frames[i], 0, 0);
+      onProgress?.(53 + ((i + 1) / frames.length) * 45, `Кодирование WebM (${i + 1}/${frames.length})...`);
+      await new Promise((r) => setTimeout(r, frameMs));
+    }
+    recorder.stop();
+    await stopped;
+    stream.getTracks().forEach((track) => track.stop());
+
+    const blob = new Blob(chunks, { type: mimeType });
+    onProgress?.(100, 'Готово!');
+    return {
+      blob,
+      url: URL.createObjectURL(blob),
+      durationSec: frames.length / fps,
+      frameCount: frames.length,
+      fileSizeBytes: blob.size,
+      width,
+      height,
+    };
+  } finally {
+    frames.length = 0;
     video.removeAttribute('src');
     video.load();
   }

@@ -11,7 +11,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use looper::{
     LoopAnalysisResult, LoopProcessOptions, LoopProcessResult, LoopProgressEvent, VideoProbeInfo,
 };
-use optimizer::TranscodeOptions;
+use optimizer::{OptimizeProgressEvent, PreviewSheet, TranscodeOptions, TranscodeResult};
 
 #[derive(Default)]
 struct AllowedVideoPaths(Mutex<HashSet<PathBuf>>);
@@ -48,6 +48,39 @@ fn preview_ffmpeg_args(options: TranscodeOptions) -> Vec<String> {
     cmd.get_args()
         .map(|s| s.to_string_lossy().into_owned())
         .collect()
+}
+
+#[tauri::command]
+async fn extract_preview_sheet(
+    input_path: String,
+    allowed: tauri::State<'_, AllowedVideoPaths>,
+) -> Result<PreviewSheet, String> {
+    let sheet = tauri::async_runtime::spawn_blocking(move || {
+        optimizer::extract_preview_sheet(&input_path, 64)
+    })
+    .await
+    .map_err(|e| format!("Ошибка фоновой задачи извлечения кадров: {}", e))??;
+    allowed.insert(&sheet.path);
+    Ok(sheet)
+}
+
+#[tauri::command]
+async fn optimize_video(
+    options: TranscodeOptions,
+    on_progress: tauri::ipc::Channel<OptimizeProgressEvent>,
+    allowed: tauri::State<'_, AllowedVideoPaths>,
+) -> Result<TranscodeResult, String> {
+    allowed.insert(&options.input_path);
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        optimizer::optimize_video(&options, |ev| {
+            let _ = on_progress.send(ev);
+        })
+    })
+    .await
+    .map_err(|e| format!("Ошибка фоновой задачи кодирования: {}", e))??;
+
+    allowed.insert(&result.output_path);
+    Ok(result)
 }
 
 #[tauri::command]
@@ -177,6 +210,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_obs_url,
             preview_ffmpeg_args,
+            extract_preview_sheet,
+            optimize_video,
             probe_video,
             analyze_video_loop,
             process_video_loop,

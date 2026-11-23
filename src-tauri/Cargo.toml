@@ -25,6 +25,12 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
 
+# binutils из Nix не может слинковать секцию .debug_info в libgio rlib
+# ("bad reloc symbol index"). Отладочная информация в dev-сборках не нужна —
+# отключаем её, чтобы cargo build / cargo test / tauri dev линковались.
+[profile.dev]
+debug = 0
+
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
 [profile.release]
 codegen-units = 1
