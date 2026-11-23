@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { nextTick, ref, watch } from 'vue';
 import { useAvatarStore } from '../stores/avatar';
 
 const store = useAvatarStore();
@@ -14,13 +14,14 @@ const srcB = ref('');
 // Watch changes to the active video URL from state machine
 watch(
   () => store.activeVideoUrl,
-  (newUrl) => {
+  async (newUrl) => {
     if (!newUrl) return;
 
     if (activeSlot.value === 'A') {
-      // Load into B
       if (srcB.value !== newUrl) {
         srcB.value = newUrl;
+        await nextTick();
+        playerB.value?.load();
       }
       playerB.value?.play().then(() => {
         activeSlot.value = 'B';
@@ -29,9 +30,10 @@ watch(
         // Handle autoplay policy or format delay
       });
     } else {
-      // Load into A
       if (srcA.value !== newUrl) {
         srcA.value = newUrl;
+        await nextTick();
+        playerA.value?.load();
       }
       playerA.value?.play().then(() => {
         activeSlot.value = 'A';

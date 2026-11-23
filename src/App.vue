@@ -3,8 +3,9 @@ import { ref } from 'vue';
 import DualPlayer from './components/DualPlayer.vue';
 import ControlPanel from './components/ControlPanel.vue';
 import ChromaOptimizer from './components/ChromaOptimizer.vue';
+import SeamlessLooper from './components/SeamlessLooper.vue';
 
-const activeTab = ref<'stream' | 'optimizer' | 'profile'>('stream');
+const activeTab = ref<'stream' | 'looper' | 'optimizer' | 'profile'>('stream');
 </script>
 
 <template>
@@ -31,6 +32,15 @@ const activeTab = ref<'stream' | 'optimizer' | 'profile'>('stream');
           ]"
         >
           🎙️ Стрим и триггеры
+        </button>
+        <button
+          @click="activeTab = 'looper'"
+          :class="[
+            'px-3.5 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer',
+            activeTab === 'looper' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
+          ]"
+        >
+          🔁 Бесшовный цикл
         </button>
         <button
           @click="activeTab = 'optimizer'"
@@ -78,8 +88,13 @@ const activeTab = ref<'stream' | 'optimizer' | 'profile'>('stream');
         </div>
       </div>
 
-      <!-- Tab 2: Video Optimizer / Chroma Key -->
-      <div v-else-if="activeTab === 'optimizer'" class="max-w-3xl mx-auto">
+      <!-- Tab 2: Seamless Video Loop Studio (kept mounted so loaded video persists across tabs) -->
+      <div v-show="activeTab === 'looper'">
+        <SeamlessLooper :active="activeTab === 'looper'" />
+      </div>
+
+      <!-- Tab 3: Video Optimizer / Chroma Key -->
+      <div v-if="activeTab === 'optimizer'" class="max-w-3xl mx-auto">
         <ChromaOptimizer />
       </div>
     </main>

@@ -90,6 +90,26 @@ export const useAvatarStore = defineStore('avatar', () => {
     activeOneShotId.value = null;
   }
 
+  function assignLoopToSlot(
+    slot: 'idle' | 'talk',
+    optimizedWebmPath: string,
+    name: string,
+    duration?: number
+  ) {
+    const videoId =
+      slot === 'idle'
+        ? manifest.value.defaultIdleVideoId
+        : manifest.value.defaultTalkVideoId;
+
+    manifest.value.videos[videoId] = {
+      id: videoId,
+      name,
+      optimizedWebmPath,
+      duration,
+      isLoop: true,
+    };
+  }
+
   return {
     manifest,
     isSpeaking,
@@ -105,5 +125,6 @@ export const useAvatarStore = defineStore('avatar', () => {
     triggerEmotion,
     triggerOneShot,
     clearOneShot,
+    assignLoopToSlot,
   };
 });

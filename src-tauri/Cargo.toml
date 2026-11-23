@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "2D VTuber Creator and Studio"
 authors = ["you"]
 edition = "2024"
+default-run = "creator-2d-avatar"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

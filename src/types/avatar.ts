@@ -1,10 +1,79 @@
 export type VideoResolution = '480p' | '720p' | '1080p' | '2k';
 
+export type LoopMode = 'crossfade' | 'ping_pong' | 'morph' | 'smart_cut';
+
+export type OutputFormat = 'webm' | 'mp4' | 'gif' | 'mov';
+
 export interface ChromaKeyConfig {
   enabled: boolean;
   colorHex: string; // e.g. '#00FF00'
   similarity: number; // 0.0 - 1.0
   blend: number; // 0.0 - 1.0
+}
+
+export interface VideoProbeInfo {
+  path: string;
+  width: number;
+  height: number;
+  fps: number;
+  durationSec: number;
+  frameCount: number;
+  codecName: string;
+  pixFmt: string;
+  hasAlpha: boolean;
+  fileSizeBytes: number;
+}
+
+export interface LoopCandidate {
+  startSec: number;
+  endSec: number;
+  durationSec: number;
+  similarity: number;
+  poseSimilarity: number;
+  motionSimilarity: number;
+}
+
+export interface LoopAnalysisResult {
+  probe: VideoProbeInfo;
+  originalSeamSimilarity: number;
+  sampledFps: number;
+  sampledFrames: number;
+  candidates: LoopCandidate[];
+}
+
+export interface LoopProcessOptions {
+  inputPath: string;
+  outputPath?: string | null;
+  mode: LoopMode;
+  startSec?: number | null;
+  endSec?: number | null;
+  crossfadeSec: number;
+  bridgeSec: number;
+  exactEndFrame: boolean;
+  format: OutputFormat;
+  resolution?: string | null;
+  targetFps?: number | null;
+  chromaKey?: {
+    color_hex: string;
+    similarity: number;
+    blend: number;
+  } | null;
+}
+
+export interface LoopProgressEvent {
+  stage: string;
+  percent: number;
+  message: string;
+}
+
+export interface LoopProcessResult {
+  outputPath: string;
+  durationSec: number;
+  frameCount: number;
+  fileSizeBytes: number;
+  originalSeamSimilarity: number;
+  outputSeamSimilarity: number;
+  ffmpegArgs: string[];
 }
 
 export interface VideoSlot {

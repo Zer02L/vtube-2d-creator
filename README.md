@@ -11,8 +11,9 @@
 1. **Бесшовный Dual-Player (Ping-Pong):**
    - Два скрытых параллельных видеоплеера, сменяющих друг друга на лету.
    - Устраняет разрывы анимации, микрофризы и черные кадры при переходе Покой ↔ Разговор ↔ Эмоция.
-2. **Встроенный конвертер и Хромакей:**
+2. **Встроенный конвертер, Хромакей и Студия бесшовных циклов:**
    - Преобразование MOV (ProRes), MP4, GIF, WebM в стандартизированный формат с прозрачностью.
+   - Вкладка **«Бесшовный цикл»** (`SeamlessLooper` + Rust `looper` + CLI `loop-video`): автоматический поиск совпадающих поз/скоростей движения, инспектор стыка 1-го и последнего кадров (наложение, рядом, карта отличий) и 4 режима зацикливания (`Кроссфейд`, `Пинг-понг`, `Морфинг-мост` через `minterpolate`, `Умная обрезка`) с опцией попиксельного совпадения финального кадра и сохранением Alpha-канала.
    - Интерактивная «Пипетка» для выбора цвета фона, настройка чувствительности (Similarity) и сглаживания (Blend).
    - Пресеты разрешений: `480p`, `720p`, `1080p` (дефолт), `2K`.
 3. **Voice Activity Detection (VAD) на Rust:**
@@ -35,7 +36,10 @@ creator-2d-avatar/
 │   ├── components/
 │   │   ├── DualPlayer.vue         # Двухбуферный бесшовный видеоплеер
 │   │   ├── ControlPanel.vue       # Панель управления, шкала VAD, эмоции, OBS URL
+│   │   ├── SeamlessLooper.vue     # Студия зацикливания видео + инспектор 1-го и последнего кадров
 │   │   └── ChromaOptimizer.vue    # Конвертер видео и удаление фона
+│   ├── utils/
+│   │   └── loopEngine.ts          # Предпросмотр цикла, сравнение шва и браузерный экспорт WebM
 │   ├── stores/
 │   │   └── avatar.ts              # Pinia стейт-машина состояний аватара
 │   ├── types/
@@ -47,6 +51,10 @@ creator-2d-avatar/
 │   │   ├── audio/                 # Аудио ядро (VAD, RMS фильтры)
 │   │   │   ├── mod.rs
 │   │   │   └── vad.rs
+│   │   ├── bin/
+│   │   │   └── loop-video.rs      # CLI утилита анализа и зацикливания видео
+│   │   ├── looper/                # Движок бесшовных циклов FFmpeg + проверка 1-й↔последний кадр
+│   │   │   └── mod.rs
 │   │   ├── optimizer/             # Конвейер FFmpeg для хромакея и транскодинга
 │   │   │   └── mod.rs
 │   │   ├── profile/               # Менеджер профилей и манифестов .vtuber
@@ -82,9 +90,14 @@ npm run build
   ```
 - **На Ubuntu / Debian:**
   ```bash
-  sudo apt install libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf ffmpeg
+  sudo apt install libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf ffmpeg \
+    gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad \
+    gstreamer1.0-plugins-ugly gstreamer1.0-libav
   npm run tauri dev
   ```
+  > GStreamer-плагины нужны WebKitGTK для воспроизведения `<video>` в предпросмотре и плеере.
+  > Без `gstreamer1.0-plugins-good` в консоли появляется `autoaudiosink not found` и `GLib-GObject-CRITICAL`.
+  > На NixOS все необходимые плагины и `GST_PLUGIN_SYSTEM_PATH` подключаются автоматически через `shell.nix`.
 - **На Windows:**
   Убедитесь, что установлены `WebView2`, `Rust` и `ffmpeg` в PATH:
   ```bash
