@@ -34,14 +34,11 @@ export const useAvatarStore = defineStore('avatar', () => {
   const isServerRunning = ref(false);
   const isOverlayOpen = ref(false);
 
-  // Active video URL resolver
-  const activeVideoUrl = computed(() => {
+  function resolveActiveVideoId(): string {
     // 1. One-shot reaction has highest priority
     if (activeOneShotId.value) {
       const oneShot = manifest.value.oneShots.find(o => o.id === activeOneShotId.value);
-      if (oneShot && manifest.value.videos[oneShot.videoId]) {
-        return manifest.value.videos[oneShot.videoId].optimizedWebmPath;
-      }
+      if (oneShot && manifest.value.videos[oneShot.videoId]) return oneShot.videoId;
     }
 
     // 2. Emotion state
@@ -49,16 +46,18 @@ export const useAvatarStore = defineStore('avatar', () => {
       const emotion = manifest.value.emotions.find(e => e.id === currentEmotionId.value);
       if (emotion) {
         const vidId = isSpeaking.value ? emotion.talkVideoId : emotion.idleVideoId;
-        if (manifest.value.videos[vidId]) {
-          return manifest.value.videos[vidId].optimizedWebmPath;
-        }
+        if (manifest.value.videos[vidId]) return vidId;
       }
     }
 
     // 3. Default Idle / Talk state
-    const defaultId = isSpeaking.value ? manifest.value.defaultTalkVideoId : manifest.value.defaultIdleVideoId;
-    return manifest.value.videos[defaultId]?.optimizedWebmPath || '';
-  });
+    return isSpeaking.value ? manifest.value.defaultTalkVideoId : manifest.value.defaultIdleVideoId;
+  }
+
+  const activeSlot = computed(() => manifest.value.videos[resolveActiveVideoId()] ?? null);
+
+  // Active video URL resolver
+  const activeVideoUrl = computed(() => activeSlot.value?.optimizedWebmPath || '');
 
   function setSpeaking(speaking: boolean) {
     isSpeaking.value = speaking;
@@ -94,7 +93,9 @@ export const useAvatarStore = defineStore('avatar', () => {
     slot: 'idle' | 'talk',
     optimizedWebmPath: string,
     name: string,
-    duration?: number
+    duration?: number,
+    previewFrames?: HTMLCanvasElement[],
+    previewFps?: number
   ) {
     const videoId =
       slot === 'idle'
@@ -107,6 +108,8 @@ export const useAvatarStore = defineStore('avatar', () => {
       optimizedWebmPath,
       duration,
       isLoop: true,
+      previewFrames,
+      previewFps,
     };
   }
 
@@ -120,6 +123,7 @@ export const useAvatarStore = defineStore('avatar', () => {
     isServerRunning,
     isOverlayOpen,
     activeVideoUrl,
+    activeSlot,
     setSpeaking,
     setVolume,
     triggerEmotion,

@@ -121,6 +121,9 @@ export interface VideoSlot {
   optimizedWebmPath: string;
   duration?: number;
   isLoop: boolean;
+  /** Кадры для UI-превью (FFmpeg), вместо <video> с alpha-WebM. */
+  previewFrames?: HTMLCanvasElement[];
+  previewFps?: number;
 }
 
 export interface EmotionProfile {

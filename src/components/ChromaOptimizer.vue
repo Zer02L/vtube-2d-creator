@@ -18,11 +18,11 @@ import {
   extractChromaPreviewFrames,
   type ChromaPreviewFrames,
 } from '../utils/chroma';
+import { loadNativePreviewFrames, type PreviewFrameSet } from '../utils/previewFrames';
 import { exportChromaKeyedWebmInBrowser } from '../utils/loopEngine';
 import type {
   ChromaKeyConfig,
   OptimizeProgressEvent,
-  PreviewSheet,
   TranscodeResult,
   VideoProbeInfo,
   VideoResolution,
@@ -73,6 +73,13 @@ const resultMeta = ref<{
   hasAlpha: boolean;
 } | null>(null);
 const assignedSlot = ref<'idle' | 'talk' | null>(null);
+
+// Превью результата тоже рисуем canvas: GStreamer падает на WebM с альфой.
+const resultFrames = ref<PreviewFrameSet | null>(null);
+const resultCanvas = ref<HTMLCanvasElement | null>(null);
+let resultRafId: number | null = null;
+let resultLastTick = 0;
+let resultFrameIdx = 0;
 
 const previewCanvas = ref<HTMLCanvasElement | null>(null);
 let previewFrames: ChromaPreviewFrames | null = null;
@@ -185,7 +192,37 @@ function invalidateKeyedFrames() {
 
 watch([chroma, showOriginal], () => invalidateKeyedFrames(), { deep: true });
 
+function stopResultLoop() {
+  if (resultRafId !== null) {
+    cancelAnimationFrame(resultRafId);
+    resultRafId = null;
+  }
+}
+
+function resultTick(now: number) {
+  resultRafId = requestAnimationFrame(resultTick);
+  const data = resultFrames.value;
+  const canvas = resultCanvas.value;
+  if (!data || !canvas) {
+    resultLastTick = now;
+    return;
+  }
+  const delta = Math.min(0.25, (now - resultLastTick) / 1000);
+  resultLastTick = now;
+  resultFrameIdx = (resultFrameIdx + delta * data.fps) % data.frames.length;
+  const idx = Math.floor(resultFrameIdx);
+  if (canvas.width !== data.width || canvas.height !== data.height) {
+    canvas.width = data.width;
+    canvas.height = data.height;
+  }
+  const ctx = canvas.getContext('2d');
+  ctx?.drawImage(data.frames[idx], 0, 0);
+}
+
 function resetResult() {
+  stopResultLoop();
+  resultFrames.value = null;
+  resultFrameIdx = 0;
   if (resultUrl.value) URL.revokeObjectURL(resultUrl.value);
   resultUrl.value = '';
   resultNativePath.value = '';
@@ -195,51 +232,8 @@ function resetResult() {
 }
 
 async function loadNativePreview(path: string): Promise<ChromaPreviewFrames> {
-  optsProgress(45, 'FFmpeg извлекает кадры...');
-  const sheet = await invoke<PreviewSheet>('extract_preview_sheet', { inputPath: path });
-  optsProgress(80, 'Разбор спрайтлиста...');
-  const bytes = await invoke<ArrayBuffer>('read_video_bytes', { path: sheet.path });
-  const blobUrl = URL.createObjectURL(new Blob([bytes], { type: 'image/png' }));
-  try {
-    const image = new Image();
-    await new Promise<void>((resolve, reject) => {
-      image.onload = () => resolve();
-      image.onerror = () => reject(new Error('Не удалось прочитать спрайтлист кадров'));
-      image.src = blobUrl;
-    });
-
-    const frames: HTMLCanvasElement[] = [];
-    for (let i = 0; i < sheet.frameCount; i++) {
-      const frame = document.createElement('canvas');
-      frame.width = sheet.tileWidth;
-      frame.height = sheet.tileHeight;
-      frame.getContext('2d')!.drawImage(
-        image,
-        (i % sheet.columns) * sheet.tileWidth,
-        Math.floor(i / sheet.columns) * sheet.tileHeight,
-        sheet.tileWidth,
-        sheet.tileHeight,
-        0,
-        0,
-        sheet.tileWidth,
-        sheet.tileHeight
-      );
-      frames.push(frame);
-    }
-    optsProgress(100, 'Кадры предпросмотра готовы');
-    return {
-      frames,
-      width: sheet.tileWidth,
-      height: sheet.tileHeight,
-      durationSec: sheet.durationSec,
-      fps: frames.length / sheet.durationSec,
-      dispose: () => {
-        frames.length = 0;
-      },
-    };
-  } finally {
-    URL.revokeObjectURL(blobUrl);
-  }
+  const data = await loadNativePreviewFrames(path, 64, optsProgress);
+  return { ...data, dispose: () => { data.frames.length = 0; } };
 }
 
 function optsProgress(percent: number, message: string) {
@@ -401,6 +395,13 @@ async function startOptimization() {
         height: result.height,
         hasAlpha: result.hasAlpha,
       };
+      // Не отдаём результат в <video>: GStreamer падает на таком WebM.
+      resultFrames.value = await loadNativePreviewFrames(result.outputPath, 64, (pct, msg) => {
+        progress.value = pct;
+        statusMessage.value = msg;
+      });
+      resultLastTick = performance.now();
+      resultRafId = requestAnimationFrame(resultTick);
     } else {
       const result = await exportChromaKeyedWebmInBrowser(
         inputObjectUrl.value,
@@ -451,14 +452,33 @@ async function revealOutputFolder() {
   }
 }
 
-function assignToAvatar(slot: 'idle' | 'talk') {
+async function assignToAvatar(slot: 'idle' | 'talk') {
   if (!resultUrl.value) return;
-  store.assignLoopToSlot(slot, resultUrl.value, resultName.value, resultMeta.value?.durationSec);
+  let frames: HTMLCanvasElement[] | undefined;
+  let fps: number | undefined;
+  if (runningInTauri && resultNativePath.value) {
+    try {
+      const data = await loadNativePreviewFrames(resultNativePath.value, 128);
+      frames = data.frames;
+      fps = data.fps;
+    } catch (err) {
+      errorMessage.value = err instanceof Error ? err.message : String(err);
+    }
+  }
+  store.assignLoopToSlot(
+    slot,
+    resultUrl.value,
+    resultName.value,
+    resultMeta.value?.durationSec,
+    frames,
+    fps
+  );
   assignedSlot.value = slot;
 }
 
 onBeforeUnmount(() => {
   stopLoop();
+  stopResultLoop();
   previewFrames?.dispose();
   if (inputObjectUrl.value) URL.revokeObjectURL(inputObjectUrl.value);
   if (resultUrl.value) URL.revokeObjectURL(resultUrl.value);
@@ -715,7 +735,13 @@ onBeforeUnmount(() => {
         class="relative rounded-xl border border-slate-800 overflow-hidden flex items-center justify-center"
         style="background-image: linear-gradient(45deg, #111827 25%, transparent 25%), linear-gradient(-45deg, #111827 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #111827 75%), linear-gradient(-45deg, transparent 75%, #111827 75%); background-size: 20px 20px; background-position: 0 0, 0 10px, 10px -10px, -10px 0px; background-color: #0b0f19;"
       >
+        <canvas
+          v-if="resultFrames"
+          ref="resultCanvas"
+          class="max-h-[260px] w-auto h-auto object-contain"
+        />
         <video
+          v-else
           :src="resultUrl"
           autoplay
           loop

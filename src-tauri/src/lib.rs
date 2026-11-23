@@ -53,10 +53,11 @@ fn preview_ffmpeg_args(options: TranscodeOptions) -> Vec<String> {
 #[tauri::command]
 async fn extract_preview_sheet(
     input_path: String,
+    max_frames: Option<u32>,
     allowed: tauri::State<'_, AllowedVideoPaths>,
 ) -> Result<PreviewSheet, String> {
     let sheet = tauri::async_runtime::spawn_blocking(move || {
-        optimizer::extract_preview_sheet(&input_path, 64)
+        optimizer::extract_preview_sheet(&input_path, max_frames.unwrap_or(64))
     })
     .await
     .map_err(|e| format!("Ошибка фоновой задачи извлечения кадров: {}", e))??;
