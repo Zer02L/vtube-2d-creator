@@ -41,6 +41,9 @@ pkgs.mkShell {
   ] ++ gstPlugins;
 
   shellHook = ''
+    # Пребилд .node-биндинги (например @tauri-apps/cli) не patchelf-нуты
+    # и ищут liblzma.so.5 через LD_LIBRARY_PATH — добавляем xz явно,
+    # чтобы не зависеть от состояния /etc/ld.so.cache.
     export LD_LIBRARY_PATH=${pkgs.lib.makeLibraryPath (with pkgs; [
       gtk3
       webkitgtk_4_1
@@ -48,6 +51,7 @@ pkgs.mkShell {
       cairo
       pango
       alsa-lib
+      xz
     ] ++ gstPlugins)}:$LD_LIBRARY_PATH
 
     # Явно сообщаем WebKit/GStreamer, где искать плагины (autoaudiosink и др.).
