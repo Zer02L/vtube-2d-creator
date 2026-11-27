@@ -64,7 +64,8 @@ creator-2d-avatar/
 │   ├── Cargo.toml                 # Rust зависимости
 │   └── tauri.conf.json            # Конфигурация окон (Main + Overlay)
 ├── shell.nix                      # Nix-окружение со всеми системными библиотеками
-└── package.json                   # Зависимости фронтенда
+├── package.json                   # Зависимости фронтенда
+└── pnpm-lock.yaml                 # Lockfile зависимостей фронтенда
 ```
 
 ---
@@ -73,27 +74,28 @@ creator-2d-avatar/
 
 ### Быстрый старт (веб-интерфейс и плеер):
 ```bash
-npm install
-npm run dev
+corepack enable   # если pnpm ещё не установлен
+pnpm install
+pnpm run dev
 ```
 Откройте [http://localhost:1420](http://localhost:1420) в браузере.
 
 ### Сборка фронтенда:
 ```bash
-npm run build
+pnpm run build
 ```
 
 ### Запуск десктопного приложения через Tauri:
 - **На NixOS:**
   ```bash
-  nix-shell --run "npm run tauri dev"
+  nix-shell --run "pnpm run tauri dev"
   ```
 - **На Ubuntu / Debian:**
   ```bash
   sudo apt install libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf ffmpeg \
     gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad \
     gstreamer1.0-plugins-ugly gstreamer1.0-libav
-  npm run tauri dev
+  pnpm run tauri dev
   ```
   > GStreamer-плагины нужны WebKitGTK для воспроизведения `<video>` в предпросмотре и плеере.
   > Без `gstreamer1.0-plugins-good` в консоли появляется `autoaudiosink not found` и `GLib-GObject-CRITICAL`.
@@ -101,5 +103,5 @@ npm run build
 - **На Windows:**
   Убедитесь, что установлены `WebView2`, `Rust` и `ffmpeg` в PATH:
   ```bash
-  npm run tauri dev
+  pnpm run tauri dev
   ```

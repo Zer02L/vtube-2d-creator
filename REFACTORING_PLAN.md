@@ -5,7 +5,7 @@
 
 Легенда:
 - `[ ]` — не начато
-- `[x]` — сделано и проверено (`npm run build` / `cargo test` / ручная проверка)
+- `[x]` — сделано и проверено (`pnpm run build` / `cargo test` / ручная проверка)
 - `[~]` — в работе (можно писать так, потом заменить на `[x]`)
 
 ## Исходная картина (на момент составления)
@@ -29,14 +29,14 @@
 
 - [ ] Удалить 3 закоммиченных тестовых `.webm` из корня `src-tauri/` (~9.5 МБ). При необходимости нужные файлы перенести в `tests/fixtures/`.
 - [ ] Добавить в `.gitignore` правило для тестовых медиа (например `tests/fixtures/*.webm` или `*.webm` в `src-tauri/`).
-- [ ] Удалить неиспользуемую зависимость `@vueuse/core` из `package.json` + `package-lock.json` (`npm uninstall @vueuse/core`).
+- [ ] Удалить неиспользуемую зависимость `@vueuse/core` из `package.json` + `pnpm-lock.yaml` (`pnpm remove @vueuse/core`).
 - [ ] Добавить `@types/node` в devDependencies и убрать `// @ts-expect-error` над `import process from 'node:process'` в `vite.config.ts`.
 - [ ] Убрать `'profile'` из union-типа `activeTab` в `src/App.vue:8` (вкладки и контента нет).
 - [ ] Разобраться с мёртвыми Tauri-командами в `src-tauri/src/lib.rs`: `get_obs_url:41`, `preview_ffmpeg_args:46`. Либо подключить к UI, либо удалить из `generate_handler!` и кода.
 - [ ] Убрать статичный индикатор «OBS Сервер активен» в `src/App.vue:58` или завязать его на реальное состояние (`store.isServerRunning`).
 - [ ] Удалить неиспользуемые поля `isServerRunning`, `isOverlayOpen` из `src/stores/avatar.ts`, если они не понадобятся в Фазе 4 (иначе оставить с пометкой).
 - [ ] Привести `README.md` в соответствие с фактом: HTTP-сервера, загрузки/сохранения профилей и работающего оверлея сейчас нет. Либо удалить обещания, либо оставить TODO-списком.
-- [ ] Проверить: `npm run build` проходит, `git status` чистый.
+- [ ] Проверить: `pnpm run build` проходит, `git status` чистый.
 
 ## Фаза 1. Общие модули frontend (чистый move-код)
 
@@ -50,7 +50,7 @@
 - [ ] `src/lib/video/presets.ts` — пресеты разрешений, `resolveResolutionDims`, `parseResolutionDims`, нормализация hex-цвета, `guessMimeFromPath`. Устранить 5 копий из `ChromaOptimizer.vue:93`, `chroma.ts:47`, `loopEngine.ts:679`, `SeamlessLooper.vue:576` (и Rust-аналоги — см. Фазу 3).
 - [ ] `src/lib/tauri/ipc.ts` — типизированные обёртки `invoke` + `Channel`, helpers `stageVideo(file)`, `readVideoBytes(path)`, `revealInFolder(path)`, `loadPreviewSheet(path)`. Сюда же переехать `guessMimeFromPath`.
 - [ ] `src/types/avatar.ts` — ввести алиасы `ProgressEvent { stage, percent, message }` и `ChromaKeyParams` вместо двух идентичных интерфейсов и двух inline-форм `chromaKey` (строки 63, 100, 56, 93).
-- [ ] Обновить импорты во всех потребителях; `npm run build` проходит; поведение не изменилось.
+- [ ] Обновить импорты во всех потребителях; `pnpm run build` проходит; поведение не изменилось.
 
 ## Фаза 2. Разделение крупных компонентов
 
@@ -126,7 +126,7 @@
 ## Критерий завершения фазы
 
 - Все чекбоксы фазы отмечены `[x]`;
-- `npm run build` проходит без ошибок `vue-tsc`;
+- `pnpm run build` проходит без ошибок `vue-tsc`;
 - `nix-shell --run "cargo test"` проходит;
 - Вручную проверены оба режима: Tauri (FFmpeg native) и браузерный (Canvas fallback);
 - Поведение пользователя до/после рефакторинга одинаково (кроме явно оговорённых изменений в Фазе 4).

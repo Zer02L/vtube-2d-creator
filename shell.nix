@@ -20,6 +20,7 @@ pkgs.mkShell {
     cargo
     rustc
     nodejs
+    pnpm
   ];
 
   buildInputs = with pkgs; [
@@ -57,6 +58,12 @@ pkgs.mkShell {
     # Явно сообщаем WebKit/GStreamer, где искать плагины (autoaudiosink и др.).
     export GST_PLUGIN_SYSTEM_PATH=${pkgs.lib.makeSearchPath "lib/gstreamer-1.0" gstPlugins}:$GST_PLUGIN_SYSTEM_PATH
     export GST_PLUGIN_PATH=$GST_PLUGIN_SYSTEM_PATH
+
+    # GSettings: нативный файлпикер GTK (используется WebKit для <input type="file">)
+    # берёт схему org.gtk.Settings.FileChooser из XDG_DATA_DIRS. В nixpkgs схемы
+    # лежат в share/gsettings-schemas/<name>/glib-2.0/schemas, а системный
+    # XDG_DATA_DIRS этого пути не содержит -> GLib-GIO-ERROR и битый диалог.
+    export XDG_DATA_DIRS="${pkgs.gtk3}/share/gsettings-schemas/${pkgs.gtk3.name}:${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}:$XDG_DATA_DIRS"
 
     # Аппаратные декодеры (NVDEC/VA-API) выдают кадры в memory:CUDAMemory,
     # которые WebKit не может нарисовать в <canvas> -> видео в предпросмотре пустое.
